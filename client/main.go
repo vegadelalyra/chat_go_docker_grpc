@@ -1,72 +1,105 @@
 package main
 
 import (
+	"bufio"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"flag"
 	"fmt"
 	"log"
-	"net/http"
-	"strconv"
+	"os"
+	"sync"
+	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/vegadelalyra/go_grpc/proto"
+	"github.com/vegadelalyra/chat_go_docker_grpc/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var client proto.BroadcastClient
+var wait *sync.WaitGroup
+
 func main() {
-	conn, err := grpc.NewClient(
-		"localhost:4040", 
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	timestamp := time.Now()
+	done := make(chan int)
+
+	name := flag.String("N", "Anon", "The name of the user")
+	flag.Parse()
+
+	id := sha256.Sum256([]byte(timestamp.String() + *name))
+
+	conn, err := grpc.NewClient("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		panic(err)
+		log.Fatalf("Couldn't connect to service: %v", err)
 	}
 
-	client := proto.NewAddServiceClient(conn)
-
-	g := gin.Default()
-
-	g.GET("/add/:a/:b", func(ctx *gin.Context) {
-		a, err := strconv.ParseUint(ctx.Param("a"), 10, 64)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Parameter A"})
-			return
-		}
-
-		b, err := strconv.ParseUint(ctx.Param("b"), 10, 64)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Parameter B"})
-			return
-		}
-
-		req := &proto.Request{A: int64(a), B: int64(b)}
-		if response, err := client.Add(ctx, req); err == nil {
-			ctx.JSON(http.StatusOK, gin.H{"result": fmt.Sprint(response.Result),})
-		} else {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
-	})
-
-	g.GET("/mult/:a/:b", func(ctx *gin.Context) {
-		a, err := strconv.ParseUint(ctx.Param("a"), 10, 64)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Parameter A"})
-			return
-		}
-
-		b, err := strconv.ParseUint(ctx.Param("b"), 10, 64)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Parameter B"})
-			return
-		}
-
-		req := &proto.Request{A: int64(a), B: int64(b)}
-		if response, err := client.Multiply(ctx, req); err == nil {
-			ctx.JSON(http.StatusOK, gin.H{"result": fmt.Sprint(response.Result),})
-		} else {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
-	})
-
-	if err := g.Run(":8080"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+	client = proto.NewBroadcastClient(conn)
+	user := &proto.User{
+		Id: hex.EncodeToString(id[:]),
+		Name: *name,
 	}
+
+	connect(user)
+
+	wait.Add(1)
+	go func() {
+		defer wait.Done()
+
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			msg := &proto.Message{
+				Id: user.Id,
+				Content: scanner.Text(),
+				Timestamp: timestamp.String(),
+			}
+
+			_, err := client.BroadcastMessage(context.Background(), msg)
+			if err != nil {
+				fmt.Printf("error Sending Message: %v\n", err)
+				break
+			}
+		}
+	}()
+
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+
+	<-done
+}
+
+func init() {
+	wait = &sync.WaitGroup{}
+}
+
+func connect(user *proto.User) error {
+	var streamerror error
+
+	stream, err := client.CreateStream(context.Background(), &proto.Connect{
+		User:   user,
+		Active: true,
+	})
+
+	if err != nil {
+		return fmt.Errorf("connection failed: %v", err)
+	}
+
+	wait.Add(1)
+	go func(str proto.Broadcast_CreateStreamClient) {
+		defer wait.Done()
+
+		for {
+			msg, err := str.Recv()
+			if err != nil {
+				streamerror = fmt.Errorf("error reading message: %v", err)
+				break
+			}
+
+			fmt.Printf("%v : %s\n", msg.Id, msg.Content)
+		}
+	}(stream)
+
+	return streamerror
 }

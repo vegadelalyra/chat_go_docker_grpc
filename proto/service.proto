@@ -2,16 +2,28 @@ syntax = "proto3";
 
 package proto;
 
-message Request {
-    int64 a = 1;
-    int64 b = 2;
+// Specify the Go package path
+option go_package = "github.com/vegadelalyra/chat_go_docker_grpc/proto";
+
+message User {
+    string id = 1;
+    string name = 2;
 }
 
-message Response {
-    int64 result = 1;
+message Message {
+    string id = 1;
+    string content = 2;
+    string timestamp = 3;
 }
 
-service AddService {
-    rpc Add(Request) returns (Response);
-    rpc Multiply(Request) returns (Response);
+message Connect {
+    User user = 1;
+    bool active = 2;
+}
+
+message Close{}
+
+service Broadcast {
+    rpc CreateStream(Connect) returns (stream Message);
+    rpc BroadcastMessage(Message) returns (Close);
 }

@@ -1,4 +1,5 @@
-module github.com/vegadelalyra/go_grpc
+module github.com/vegadelalyra/chat_go_docker_grpc
+
 
 go 1.22.3
 

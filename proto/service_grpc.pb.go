@@ -19,130 +19,158 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	AddService_Add_FullMethodName      = "/proto.AddService/Add"
-	AddService_Multiply_FullMethodName = "/proto.AddService/Multiply"
+	Broadcast_CreateStream_FullMethodName     = "/proto.Broadcast/CreateStream"
+	Broadcast_BroadcastMessage_FullMethodName = "/proto.Broadcast/BroadcastMessage"
 )
 
-// AddServiceClient is the client API for AddService service.
+// BroadcastClient is the client API for Broadcast service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type AddServiceClient interface {
-	Add(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	Multiply(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+type BroadcastClient interface {
+	CreateStream(ctx context.Context, in *Connect, opts ...grpc.CallOption) (Broadcast_CreateStreamClient, error)
+	BroadcastMessage(ctx context.Context, in *Message, opts ...grpc.CallOption) (*Close, error)
 }
 
-type addServiceClient struct {
+type broadcastClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewAddServiceClient(cc grpc.ClientConnInterface) AddServiceClient {
-	return &addServiceClient{cc}
+func NewBroadcastClient(cc grpc.ClientConnInterface) BroadcastClient {
+	return &broadcastClient{cc}
 }
 
-func (c *addServiceClient) Add(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+func (c *broadcastClient) CreateStream(ctx context.Context, in *Connect, opts ...grpc.CallOption) (Broadcast_CreateStreamClient, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Response)
-	err := c.cc.Invoke(ctx, AddService_Add_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Broadcast_ServiceDesc.Streams[0], Broadcast_CreateStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &broadcastCreateStreamClient{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Broadcast_CreateStreamClient interface {
+	Recv() (*Message, error)
+	grpc.ClientStream
+}
+
+type broadcastCreateStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *broadcastCreateStreamClient) Recv() (*Message, error) {
+	m := new(Message)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *broadcastClient) BroadcastMessage(ctx context.Context, in *Message, opts ...grpc.CallOption) (*Close, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Close)
+	err := c.cc.Invoke(ctx, Broadcast_BroadcastMessage_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *addServiceClient) Multiply(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Response)
-	err := c.cc.Invoke(ctx, AddService_Multiply_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// AddServiceServer is the server API for AddService service.
-// All implementations must embed UnimplementedAddServiceServer
+// BroadcastServer is the server API for Broadcast service.
+// All implementations must embed UnimplementedBroadcastServer
 // for forward compatibility
-type AddServiceServer interface {
-	Add(context.Context, *Request) (*Response, error)
-	Multiply(context.Context, *Request) (*Response, error)
-	mustEmbedUnimplementedAddServiceServer()
+type BroadcastServer interface {
+	CreateStream(*Connect, Broadcast_CreateStreamServer) error
+	BroadcastMessage(context.Context, *Message) (*Close, error)
+	mustEmbedUnimplementedBroadcastServer()
 }
 
-// UnimplementedAddServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedAddServiceServer struct {
+// UnimplementedBroadcastServer must be embedded to have forward compatible implementations.
+type UnimplementedBroadcastServer struct {
 }
 
-func (UnimplementedAddServiceServer) Add(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Add not implemented")
+func (UnimplementedBroadcastServer) CreateStream(*Connect, Broadcast_CreateStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method CreateStream not implemented")
 }
-func (UnimplementedAddServiceServer) Multiply(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Multiply not implemented")
+func (UnimplementedBroadcastServer) BroadcastMessage(context.Context, *Message) (*Close, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BroadcastMessage not implemented")
 }
-func (UnimplementedAddServiceServer) mustEmbedUnimplementedAddServiceServer() {}
+func (UnimplementedBroadcastServer) mustEmbedUnimplementedBroadcastServer() {}
 
-// UnsafeAddServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AddServiceServer will
+// UnsafeBroadcastServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BroadcastServer will
 // result in compilation errors.
-type UnsafeAddServiceServer interface {
-	mustEmbedUnimplementedAddServiceServer()
+type UnsafeBroadcastServer interface {
+	mustEmbedUnimplementedBroadcastServer()
 }
 
-func RegisterAddServiceServer(s grpc.ServiceRegistrar, srv AddServiceServer) {
-	s.RegisterService(&AddService_ServiceDesc, srv)
+func RegisterBroadcastServer(s grpc.ServiceRegistrar, srv BroadcastServer) {
+	s.RegisterService(&Broadcast_ServiceDesc, srv)
 }
 
-func _AddService_Add_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
+func _Broadcast_CreateStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Connect)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BroadcastServer).CreateStream(m, &broadcastCreateStreamServer{ServerStream: stream})
+}
+
+type Broadcast_CreateStreamServer interface {
+	Send(*Message) error
+	grpc.ServerStream
+}
+
+type broadcastCreateStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *broadcastCreateStreamServer) Send(m *Message) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Broadcast_BroadcastMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Message)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AddServiceServer).Add(ctx, in)
+		return srv.(BroadcastServer).BroadcastMessage(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AddService_Add_FullMethodName,
+		FullMethod: Broadcast_BroadcastMessage_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AddServiceServer).Add(ctx, req.(*Request))
+		return srv.(BroadcastServer).BroadcastMessage(ctx, req.(*Message))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AddService_Multiply_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AddServiceServer).Multiply(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AddService_Multiply_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AddServiceServer).Multiply(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// AddService_ServiceDesc is the grpc.ServiceDesc for AddService service.
+// Broadcast_ServiceDesc is the grpc.ServiceDesc for Broadcast service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var AddService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.AddService",
-	HandlerType: (*AddServiceServer)(nil),
+var Broadcast_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.Broadcast",
+	HandlerType: (*BroadcastServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Add",
-			Handler:    _AddService_Add_Handler,
-		},
-		{
-			MethodName: "Multiply",
-			Handler:    _AddService_Multiply_Handler,
+			MethodName: "BroadcastMessage",
+			Handler:    _Broadcast_BroadcastMessage_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "CreateStream",
+			Handler:       _Broadcast_CreateStream_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "service.proto",
 }
