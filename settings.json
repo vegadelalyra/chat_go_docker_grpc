@@ -1,0 +1,5 @@
+{
+    "go.toolsEnvVars": {
+        "PATH": "${env:PATH};C:/Users/rlyeh/AppData/Local/protoc/include"
+    }
+}
